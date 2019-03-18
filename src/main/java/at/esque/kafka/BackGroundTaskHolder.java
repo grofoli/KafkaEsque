@@ -1,5 +1,6 @@
 package at.esque.kafka;
 
+import at.esque.kafka.tasks.BackgroundRunnable;
 import com.google.inject.Singleton;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
@@ -65,5 +66,19 @@ public final class BackGroundTaskHolder {
     public void backgroundTaskStopped() {
         stopBackGroundTask.set(false);
         isInProgress.set(false);
+    }
+
+    public void runInDaemonThread(String taskDescription, BackgroundRunnable runnable) {
+        setBackGroundTaskDescription(taskDescription);
+        runInDaemonThread(runnable);
+    }
+
+    public void runInDaemonThread(BackgroundRunnable runnable) {
+        setProgressMessage(null);
+        runnable.setBackGroundTaskHolder(this);
+
+        Thread daemonThread = new Thread(runnable);
+        daemonThread.setDaemon(true);
+        daemonThread.start();
     }
 }
