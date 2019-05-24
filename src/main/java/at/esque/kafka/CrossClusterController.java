@@ -64,8 +64,8 @@ public class CrossClusterController {
     @FXML
     private ComboBox<ClusterConfig> toClusterComboBox;
 
-    private KafkaesqueAdminClient fromAdmin;
-    private KafkaesqueAdminClient toAdmin;
+    private KafkaesqueAdminClient fromAdmin = new KafkaesqueAdminClient();
+    private KafkaesqueAdminClient toAdmin = new KafkaesqueAdminClient();
 
     @Inject
     private CrossClusterOperationHandler crossClusterOperationHandler;
@@ -83,13 +83,17 @@ public class CrossClusterController {
         fromClusterComboBox.setItems(clusterConfigs.getClusterConfigs());
         toClusterComboBox.setItems(clusterConfigs.getClusterConfigs());
 
-        fromClusterComboBox.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
-            setupClusterControls(newValue, fromAdmin, fromClusterTopicsList);
-        });
+        fromClusterComboBox.getSelectionModel().selectedItemProperty()
+                .addListener((observable, oldClusterConfig, newClusterConfig) -> {
+                    fromAdmin.init(newClusterConfig.getBootStrapServers());
+                    loadTopics(fromAdmin, fromClusterTopicsList);
+                });
 
-        toClusterComboBox.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
-            setupClusterControls(newValue, toAdmin, toClusterTopicsList);
-        });
+        toClusterComboBox.getSelectionModel().selectedItemProperty()
+                .addListener((observable, oldClusterConfig, newClusterConfig) -> {
+                    toAdmin.init(newClusterConfig.getBootStrapServers());
+                    loadTopics(toAdmin, toClusterTopicsList);
+                });
 
         runningOperationsList.setCellFactory(ropl -> {
             ListCell<CrossClusterOperation> cell = new ListCell<>();
@@ -131,14 +135,9 @@ public class CrossClusterController {
         refreshOperationList(null);
     }
 
-    private void setupClusterControls(ClusterConfig clusterConfig, KafkaesqueAdminClient adminClient, FilterableListView topicList) {
-        if (adminClient != null) {
-            adminClient.close();
-        }
-        adminClient = new KafkaesqueAdminClient(clusterConfig.getBootStrapServers());
-        KafkaesqueAdminClient finalAdminClient = adminClient;
+    private void loadTopics(KafkaesqueAdminClient adminClient, FilterableListView topicList) {
         runInDaemonThread(() -> {
-            ObservableList<String> topics = FXCollections.observableArrayList(finalAdminClient.getTopics());
+            ObservableList<String> topics = FXCollections.observableArrayList(adminClient.getTopics());
             Platform.runLater(() -> topicList.setItems(topics));
         });
     }

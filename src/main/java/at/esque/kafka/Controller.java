@@ -79,8 +79,6 @@ import org.kordamp.ikonli.javafx.FontIcon;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.awt.*;
-import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -113,11 +111,12 @@ import java.util.stream.Collectors;
 
 public class Controller {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(Controller.class);
+
     private static final Pattern REPLACER_PATTERN = Pattern.compile("\\$\\{(?<identifier>.[^:{}]+):(?<type>.[^:{}]+)}");
 
-    private KafkaesqueAdminClient adminClient;
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(Controller.class);
+    //TODO use DI to inject a shared instance of the client, so that the Controller class can be split into multiple services
+    private KafkaesqueAdminClient adminClient = new KafkaesqueAdminClient();
 
     //Guice
     @Inject
@@ -216,10 +215,10 @@ public class Controller {
                     openinPublisher.setOnAction(event -> showPublishMessageDialog(row.getItem()));
                     MenuItem openAsTxt = new MenuItem("open in text editor");
                     openAsTxt.setGraphic(new FontIcon(FontAwesome.EDIT));
-                    openAsTxt.setOnAction(event -> openInTextEditor(row.getItem(), "txt"));
+                    openAsTxt.setOnAction(event -> OpenKafkaMessage.inTextEditor(row.getItem(), "txt"));
                     MenuItem openAsJson = new MenuItem("open in json editor");
                     openAsJson.setGraphic(new FontIcon(FontAwesome.EDIT));
-                    openAsJson.setOnAction(event -> openInTextEditor(row.getItem(), "json"));
+                    openAsJson.setOnAction(event -> OpenKafkaMessage.inTextEditor(row.getItem(), "json"));
                     rowMenu.getItems().addAll(openinPublisher, openAsTxt, openAsJson);
 
                     // only display context menu for non-null items:
@@ -257,7 +256,7 @@ public class Controller {
                 specificOffsetTextField.setVisible(newValue == FetchTypes.SPECIFIC_OFFSET));
 
         clusterComboBox.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
-            adminClient = new KafkaesqueAdminClient(newValue.getBootStrapServers());
+            adminClient.init(newValue.getBootStrapServers());
             refreshTopicList(newValue);
         });
 
@@ -281,23 +280,6 @@ public class Controller {
         jsonTreeView.jsonStringProperty().bind(valueTextArea.textProperty());
         jsonTreeView.visibleProperty().bind(formatJsonToggle.selectedProperty());
         bindDisableProperties();
-    }
-
-    private void openInTextEditor(KafkaMessage value, String suffix) {
-        File temp;
-        try {
-            temp = File.createTempFile("kafkaEsque-export", "." + suffix);
-
-            try (BufferedWriter bw = new BufferedWriter(new FileWriter(temp))) {
-                bw.write(value.getValue());
-            }
-
-            Desktop.getDesktop().open(temp);
-        } catch (IOException e) {
-            ErrorAlert.show(e);
-        }
-
-
     }
 
     private void bindDisableProperties() {

@@ -15,11 +15,14 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.config.ConfigResource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
@@ -28,14 +31,33 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 public class KafkaesqueAdminClient {
-    private AdminClient adminClient;
 
-    public KafkaesqueAdminClient(String bootstrapServers) {
-        Properties props = new Properties();
+    private static final Logger LOGGER = LoggerFactory.getLogger(KafkaesqueAdminClient.class);
+
+    private AdminClient adminClient;
+    private Properties props = new Properties();
+
+    public void init(String bootstrapServers) {
+        Objects.requireNonNull(bootstrapServers);
+
+        if (isInitialized(bootstrapServers)) {
+            LOGGER.info("Admin client for [{}] has been already properly initialized", bootstrapServers);
+            return;
+        }
+
         props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.setProperty(AdminClientConfig.CLIENT_ID_CONFIG, String.format("kafkaesque-%s", UUID.randomUUID()));
 
-        this.adminClient = AdminClient.create(props);
+        if (adminClient != null) {
+            adminClient.close();
+        }
+
+        adminClient = AdminClient.create(props);
+    }
+
+    private boolean isInitialized(String bootstrapServers) {
+        return adminClient != null &&
+                bootstrapServers.equals(props.getProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers));
     }
 
     public Set<String> getTopics() {
@@ -91,7 +113,4 @@ public class KafkaesqueAdminClient {
         return null;
     }
 
-    public void close() {
-        adminClient.close();
-    }
 }
