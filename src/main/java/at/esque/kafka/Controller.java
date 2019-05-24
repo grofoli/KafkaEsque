@@ -7,6 +7,7 @@ import at.esque.kafka.alerts.TopicTemplateAppliedAlert;
 import at.esque.kafka.cluster.ClusterConfig;
 import at.esque.kafka.cluster.KafkaesqueAdminClient;
 import at.esque.kafka.cluster.TopicMessageTypeConfig;
+import at.esque.kafka.controls.FilterableListView;
 import at.esque.kafka.controls.JsonTreeView;
 import at.esque.kafka.dialogs.ClusterConfigDialog;
 import at.esque.kafka.dialogs.DeleteClustersDialog;
@@ -48,7 +49,6 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
-import javafx.scene.control.ListView;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.TableColumn;
@@ -161,11 +161,9 @@ public class Controller {
     @FXML
     private TableColumn<KafkaMessage, String> messageTimestampColumn;
     @FXML
-    private ListView<String> topicListView;
+    private FilterableListView topicListView;
     @FXML
     private ComboBox<ClusterConfig> clusterComboBox;
-    @FXML
-    private Button refreshTopicListButton;
     @FXML
     private MenuItem playMessageBookMenu;
     @FXML
@@ -187,8 +185,6 @@ public class Controller {
     @FXML
     private Label taskProgressLabel;
     @FXML
-    private TextField topicFilterTextField;
-    @FXML
     private TextField messageSearchTextField;
     @FXML
     private Button interruptMessagePollingButton;
@@ -199,7 +195,7 @@ public class Controller {
     private YAMLMapper yamlMapper = new YAMLMapper();
 
     private String selectedTopic() {
-        return topicListView.getSelectionModel().getSelectedItem();
+        return topicListView.getListView().getSelectionModel().getSelectedItem();
     }
 
 
@@ -265,7 +261,7 @@ public class Controller {
             refreshTopicList(newValue);
         });
 
-        topicListView.setCellFactory(lv -> topicListCellFactory());
+        topicListView.getListView().setCellFactory(lv -> topicListCellFactory());
 
         messageSearchTextField.textProperty().addListener((observable, oldValue, newValue) -> filteredMessages.setPredicate(km -> (km.getKey() != null && StringUtils.containsIgnoreCase(km.getKey(), newValue) || (km.getValue() != null && StringUtils.containsIgnoreCase(km.getValue(), newValue)))));
 
@@ -282,9 +278,6 @@ public class Controller {
         setupClusterCombobox();
         clusterComboBox.setItems(configHandler.loadOrCreateConfigs().getClusterConfigs());
 
-        topicFilterTextField.textProperty().addListener(((observable, oldValue, newValue) ->
-                ((FilteredList<String>) topicListView.getItems()).setPredicate(t -> StringUtils.containsIgnoreCase(t, newValue))
-        ));
         jsonTreeView.jsonStringProperty().bind(valueTextArea.textProperty());
         jsonTreeView.visibleProperty().bind(formatJsonToggle.selectedProperty());
         bindDisableProperties();
@@ -314,7 +307,6 @@ public class Controller {
         publishMessageButton.disableProperty().bind(backgroundTaskInProgressProperty);
         clusterComboBox.disableProperty().bind(backgroundTaskInProgressProperty);
         playMessageBookMenu.disableProperty().bind(backgroundTaskInProgressProperty);
-        refreshTopicListButton.disableProperty().bind(backgroundTaskInProgressProperty);
         editClusterButton.disableProperty().bind(clusterComboBox.getSelectionModel().selectedItemProperty().isNull());
     }
 
@@ -412,10 +404,10 @@ public class Controller {
         deleteItem.setGraphic(new FontIcon(FontAwesome.TRASH));
         deleteItem.textProperty().set("delete");
         deleteItem.setOnAction(event -> {
-            if (ConfirmationAlert.show("Delete Topic", "Topic [" + cell.itemProperty().get() + "] will be marked for deleteion.", "Are you sure you want to delete this topic")) {
+            if (ConfirmationAlert.show("Delete Topic", "Topic [" + cell.itemProperty().get() + "] will be marked for deletion.", "Are you sure you want to delete this topic")) {
                 try {
                     adminClient.deleteTopic(cell.itemProperty().get());
-                    SuccessAlert.show("Delete Topic", null, "Topic [" + cell.itemProperty().get() + "] marked for deleteion.");
+                    SuccessAlert.show("Delete Topic", null, "Topic [" + cell.itemProperty().get() + "] marked for deletion.");
                 } catch (Exception e) {
                     ErrorAlert.show(e);
                 }
@@ -436,7 +428,6 @@ public class Controller {
     }
 
     private void refreshTopicList(ClusterConfig newValue) {
-        Platform.runLater(() -> topicListView.getItems().clear());
         backGroundTaskHolder.runInDaemonThread("getting Topics...", new TopicsForCluster(adminClient, topicListView::setItems));
     }
 
@@ -966,7 +957,7 @@ public class Controller {
                     List<KafkaMessagBookWrapper> messagesToSend = new ArrayList<>();
                     Platform.runLater(() -> backGroundTaskHolder.setBackGroundTaskDescription("Playing Message Book: scanning messages"));
                     listedFiles.forEach(file -> {
-                        if (!topicListView.getItems().contains(file.getName())) {
+                        if (!topicListView.getBaseList().contains(file.getName())) {
                             throw new RuntimeException(String.format("No such topic [%s] in current cluster", file.getName()));
                         }
                         addMessagesToSend(messagesToSend, file);

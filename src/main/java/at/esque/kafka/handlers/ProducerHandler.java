@@ -3,16 +3,17 @@ package at.esque.kafka.handlers;
 import at.esque.kafka.MessageType;
 import at.esque.kafka.cluster.ClusterConfig;
 import at.esque.kafka.cluster.TopicMessageTypeConfig;
+import at.esque.kafka.serialization.ExtendedJsonDecoder;
 import at.esque.kafka.serialization.KafkaEsqueSerializer;
 import com.google.inject.Inject;
+import com.google.inject.Singleton;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.DatumReader;
-import org.apache.avro.io.DecoderFactory;
-import org.apache.avro.io.JsonDecoder;
+import org.apache.avro.io.Decoder;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -33,6 +34,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+@Singleton
 public class ProducerHandler {
     private static final Logger LOGGER = LoggerFactory.getLogger(ProducerHandler.class);
 
@@ -110,6 +112,10 @@ public class ProducerHandler {
         return publishRecord(producerWrapper, record);
     }
 
+    public RecordMetadata sendRecord(UUID producerId, ProducerRecord producerRecord) throws InterruptedException, ExecutionException, TimeoutException {
+        return publishRecord(registeredProducers.get(producerId), producerRecord);
+    }
+
     private RecordMetadata publishRecord(ProducerWrapper producerWrapper, ProducerRecord record) throws InterruptedException, ExecutionException, TimeoutException {
         Future<RecordMetadata> future = producerWrapper.getProducer().send(record);
         RecordMetadata metadata = future.get(1, TimeUnit.MINUTES);
@@ -118,13 +124,13 @@ public class ProducerHandler {
     }
 
     private GenericRecord createRecord(ProducerWrapper producerWrapper, String json, String topic, boolean isKey) throws IOException, RestClientException {
-
-
+        if (json == null) {
+            return null;
+        }
         Schema schema = getSchemaFromRegistry(producerWrapper.getSchemaRegistryRestService(), topic + (isKey ? "-key" : "-value"));
-
         org.apache.avro.Schema avroSchema = new org.apache.avro.Schema.Parser().parse(schema.getSchema());
 
-        JsonDecoder jsonDecoder = DecoderFactory.get().jsonDecoder(avroSchema, json);
+        Decoder jsonDecoder = new ExtendedJsonDecoder(avroSchema, json);
         DatumReader<GenericRecord> reader = new GenericDatumReader<>(avroSchema);
 
         return reader.read(null, jsonDecoder);
